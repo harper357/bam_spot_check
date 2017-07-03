@@ -32,10 +32,6 @@ input_group.add_argument('-f', '--fasta', type=str, required=False,
                     help='FASTA file to spot check, including path.')
 input_group.add_argument('-s', '--seq', type=str, required=False,
                     help='Sequence to spot check.')
-#parser.add_argument('-f', '--fasta', type=str, required=True,
-#                    choices=['F', 'A', 'D', 'P'], nargs='*',
-#                    help='Programs you want the pipeline to run')
-
 ### below comes from http://stackoverflow.com/q/14097061/78845
 parser.add_argument("-v", "--verbose", help="increase output verbosity",
                     action="store_true")
