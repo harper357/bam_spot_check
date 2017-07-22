@@ -20,6 +20,8 @@ import logging
 import sys
 from time import sleep as sleep
 import os
+from decimal import Decimal
+
 
 parser = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -46,8 +48,8 @@ logging.debug('Only shown in debug mode')
 
 def bam_to_fasta(bam_file, wanted_read_count):
     """Generates the string that will be sent to NCBI from a BAM file. """
-    fraction_size = str(wanted_read_count / int(subprocess.run(['samtools', 'view', '-c', bam_file],
-                                                               stdout=subprocess.PIPE).stdout))
+    fraction_size = str(round(Decimal(wanted_read_count / int(subprocess.run(['samtools', 'view', '-c', bam_file],
+                                                               stdout=subprocess.PIPE).stdout)),15))
     wanted_bam = subprocess.run(['samtools', 'view', '-s', fraction_size, bam_file],
                                 universal_newlines=True,
                                 stdout=subprocess.PIPE).stdout
