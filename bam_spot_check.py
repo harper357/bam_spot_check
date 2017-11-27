@@ -3,13 +3,15 @@
 A tool to spot check BAM files by sending 10 reads to the NCBI BLAST server.
 
 Input:
-    BAM file OR FASTA file OR nucleotide sequence
+    BAM file OR FASTA file OR nucleotide sequence OR RID from previous BLAST job
 
 Requirements:
     Python 3.5 or above
     samtools
 
 Written by: Greg Fedewa
+Version: 0.2.0
+Copyright: 2017.11.15
 """
 
 import requests
@@ -23,16 +25,25 @@ import os
 
 
 parser = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 formatter_class=argparse.RawTextHelpFormatter,
                                  add_help=True
                                  )
 input_group = parser.add_mutually_exclusive_group(required=True)
 input_group.add_argument('-b', '--bam', type=str, required=False,
-                    help='BAM file to spot check, including path.')
+                         help='BAM file to spot check, including path.')
 input_group.add_argument('-f', '--fasta', type=str, required=False,
-                    help='FASTA file to spot check, including path.')
+                         help='FASTA file to spot check, including path.')
 input_group.add_argument('-s', '--seq', type=str, required=False,
-                    help='Sequence to spot check.')
+                         help='Sequence to spot check.')
+input_group.add_argument('-R', '--RID', type=str, required=False,
+                         help='RID of BLAST job to look up.')
+parser.add_argument('-d', '--details', type=str, required=False,
+                    choices=['F', 'A', 'S', 'C'], nargs='+',
+                    help='Additional details to print: \n\
+    F = Full name of hit \n\
+    A = Accession number \n\
+    S = Score values \n\
+    C = Complete details *not finished*')
 ### below comes from http://stackoverflow.com/q/14097061/78845
 parser.add_argument("-v", "--verbose", help="increase output verbosity",
                     action="store_true")
@@ -113,11 +124,47 @@ def get_hits(RID, RTOE, EMAIL):
     #   for x in each_query.findall(".//Hit_def")[0:5]:
     #     ' '.join(x.text.split()[0:2])
     # List comprehensions are weird and hard...
-    hits = [' '.join(x.text.split()[0:2]) for each_query in root[8] for x in each_query.findall(".//Hit_def")[0:1]]
+    # This is where I could add some flags to include more data.
+    # F = full name
+    # A = accession 
+    # S = scores
+    hits = []  
+    for BLAST_hits in root.iter('Hit'):
+        if BLAST_hits.find('Hit_num').text == '1':
+            if not args.details:
+                short_name = ' '.join(BLAST_hits.find('Hit_def').text.split()[0:2])
+                hits.append(short_name)
+            #hits = [' '.join(x.text.split()[0:2]) for each_query in root[8] for x in each_query.findall(".//Hit_def")[0:1]]
+            else:
+                temp_hit = []
+                if 'F' in args.details:
+                    # full name of hit
+                    temp_hit.append(BLAST_hits.find('Hit_def').text)
+                else:
+                    temp_hit.append(' '.join(BLAST_hits.find('Hit_def').text.split()[0:2]))
+                if 'A' in args.details: 
+                    # Accession of hit
+                    temp_hit.append(BLAST_hits.find('Hit_accession').text)
+                if 'S' in args.details: 
+                    # bit score
+                    temp_hit.append(next(BLAST_hits.iter('Hsp_bit-score')).text)
+                    # e-value
+                    temp_hit.append(next(BLAST_hits.iter('Hsp_evalue')).text)
+                    # query coverage
+                    temp_hit.append(str(round(int(next(BLAST_hits.iter('Hsp_align-len')).text) /
+                                        float(next(BLAST_hits.iter('Hsp_query-to')).text),2)*100))
+                    # identities
+                    temp_hit.append(str(round(int(next(BLAST_hits.iter('Hsp_positive')).text) /
+                                        float(next(BLAST_hits.iter('Hsp_align-len')).text), 2)*100))
+                if 'C' in args.details: 
+                    print('C is not yet supported')
+                hits.append(temp_hit)
+            #hits = [' '.join(x.text.split()[0:2]) for each_query in root[8] for x in each_query.findall(".//Hit_def")[0:1]]
     return hits
 
 
 def main():
+    #  Make sure that the user has a valid email to send to the BLAST server
     try:
         email_file = open('{}/bam_spot_check.email'.format(os.path.split(os.path.realpath(__file__))[0]),'r')
         current_email = email_file.read()
@@ -147,8 +194,32 @@ def main():
         hit_list = get_hits(*send_query(input_query, EMAIL=current_email, **kwargs), EMAIL=current_email)
     elif args.seq:
         hit_list = get_hits(*send_query(args.seq, EMAIL=current_email, **kwargs), EMAIL=current_email)
+    elif args.RID:
+        hit_list = get_hits(RID=args.RID, RTOE=0, EMAIL=current_email )
+    # make print pretty if you have any details to print
+    column_names = []
+    if args.details:
+        # full name of hit
+        column_names.append('Hit name')
+    if 'A' in args.details:
+        column_names.append('Accession')
+    if 'S' in args.details:
+        column_names.append('bit score')
+        column_names.append('e-value')
+        column_names.append('Coverage')
+        column_names.append('Identity')
+    if 'C' in args.details:
+        pass
+    temp_cols = [column_names] + hit_list
+    #modified from https://stackoverflow.com/questions/9989334/create-nice-column-output-in-python
+    column_widths = [max(map(len, column)) for column in zip(*temp_cols)]
+    # Print the titles in bold and underlined
+    print('\033[1m'+'\033[4m'+
+          '  '.join((title.ljust(spacing) for title, spacing in zip(column_names,column_widths))) +
+          '\033[0m')
     for each_hit in hit_list:
-        print(each_hit)
+        print('  '.join((detail.ljust(spacing) for detail, spacing in zip(each_hit,column_widths))))
+
 
 if __name__ == '__main__':
     main()
