@@ -10,8 +10,8 @@ Requirements:
     samtools
 
 Written by: Greg Fedewa
-Version: 0.2.0
-Copyright: 2017.11.15
+Version: 0.3.0
+Copyright: 2018.1.11
 """
 
 import requests
