@@ -81,6 +81,8 @@ def fastx_subsample(fastx_file, wanted_read_count):
         if _.startswith('>'):  # Found a FASTA entry!
             while not next(fastx_data).startswith(('>', '@', '+')):  # for the love of everything, please don't use mixed FASTQ/FASTA files...
                 temp_line = fastx_data.readline().rstrip()
+                if temp_line == '':
+                    break
                 temp_sequence = temp_sequence + temp_line
             sequence_list.append(temp_sequence)
             temp_sequence = ''
